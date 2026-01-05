@@ -30,14 +30,22 @@ def get_cached():
         return json.load(f)
 
 
+import threading
+
 @app.post("/scan-latest")
 def scan_latest():
     """
-    SLOW: Force full NSE scan and update cache
+    Trigger full NSE scan in background
     """
-    save_results("MANUAL")
-    with open(RESULT_FILE) as f:
-        return json.load(f)
+    threading.Thread(
+        target=save_results,
+        args=("MANUAL",),
+        daemon=True
+    ).start()
+
+    return {
+        "message": "Scan started in background. Results will be updated when complete."
+    }
 
 @app.get("/ping")
 def ping():
