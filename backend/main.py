@@ -42,4 +42,3 @@ def scan_latest():
 @app.get("/ping")
 def ping():
     return {"status": "alive"}
-
