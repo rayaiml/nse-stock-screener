@@ -68,3 +68,13 @@ def scan_latest():
             "Please use 'Quick Scan (Cached)' later to view results."
         )
     }
+
+STATUS_FILE = "status.json"
+
+@app.get("/status")
+def scan_status():
+    if not os.path.exists(STATUS_FILE):
+        return {"status": "IDLE"}
+
+    with open(STATUS_FILE) as f:
+        return json.load(f)
