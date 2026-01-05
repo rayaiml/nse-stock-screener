@@ -38,3 +38,8 @@ def scan_latest():
     save_results("MANUAL")
     with open(RESULT_FILE) as f:
         return json.load(f)
+
+@app.get("/ping")
+def ping():
+    return {"status": "alive"}
+
