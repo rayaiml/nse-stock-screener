@@ -78,3 +78,12 @@ def scan_status():
 
     with open(STATUS_FILE) as f:
         return json.load(f)
+STATUS_FILE = "status.json"
+
+@app.get("/status")
+def scan_status():
+    if not os.path.exists(STATUS_FILE):
+        return {"status": "IDLE"}
+
+    with open(STATUS_FILE, "r") as f:
+        return json.load(f)
