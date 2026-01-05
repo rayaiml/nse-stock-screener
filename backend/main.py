@@ -1,23 +1,40 @@
 from fastapi import FastAPI
-from screener import run_scan
-from scheduler import start_scheduler
+from fastapi.middleware.cors import CORSMiddleware
+from scheduler import start_scheduler, save_results
 import json, os
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Start scheduled scans
 start_scheduler()
 
-@app.get("/scan")
-def scan():
-    data = run_scan()
-    if not data:
-        return {"message": "No stocks currently meet your requirements."}
-    return data
+RESULT_FILE = "results.json"
 
-@app.get("/daily")
-def daily():
-    if not os.path.exists("results.json"):
-        return {"message": "Scan not completed yet. Please check after scheduled time."}
 
-    with open("results.json") as f:
+@app.get("/cached")
+def get_cached():
+    """
+    FAST: Read last cached scan
+    """
+    if not os.path.exists(RESULT_FILE):
+        return {"message": "No cached data available yet."}
+
+    with open(RESULT_FILE) as f:
         return json.load(f)
 
+
+@app.post("/scan-latest")
+def scan_latest():
+    """
+    SLOW: Force full NSE scan and update cache
+    """
+    save_results("MANUAL")
+    with open(RESULT_FILE) as f:
+        return json.load(f)
