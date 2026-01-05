@@ -18,7 +18,7 @@ start_scheduler()
 RESULT_FILE = "results.json"
 
 
-@app.get("/cached")
+@app.get("/scan-latest")
 def get_cached():
     """
     FAST: Read last cached scan
