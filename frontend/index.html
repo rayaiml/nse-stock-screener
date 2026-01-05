@@ -68,26 +68,29 @@ th{
 <header>📊 One-Click NSE Stock Screener</header>
 
 <div class="buttons">
-  <button id="runBtn">Run Scan</button>
-  <button id="dailyBtn">Daily Scan</button>
+  <button id="cachedBtn">Quick Scan (Cached)</button>
+  <button id="latestBtn">Run Latest Scan</button>
 </div>
 
 <div id="output">Ready</div>
 
 <script>
-const API = "https://nse-stock-screener.onrender.com"; // KEEP YOUR URL
-
+const API = "https://nse-stock-screener-api.onrender.com";
 const output = document.getElementById("output");
 
-document.getElementById("runBtn").addEventListener("click", runScan);
-document.getElementById("dailyBtn").addEventListener("click", loadDaily);
+document.getElementById("cachedBtn").onclick = loadCached;
+document.getElementById("latestBtn").onclick = runLatest;
 
-function renderTable(data){
-  let html = `<table>
+function renderTable(data, meta){
+  let html = `<div style="margin-bottom:8px;">
+    Last Updated: ${meta.last_updated} (${meta.scan_type})
+  </div>
+  <table>
     <tr>
       <th>Stock</th><th>RSI</th><th>ADX</th><th>MACD</th>
       <th>Current Vol</th><th>Avg Vol</th><th>BB</th><th>Trend</th>
     </tr>`;
+
   data.forEach(r=>{
     html += `<tr>
       <td>${r.stock}</td>
@@ -100,32 +103,29 @@ function renderTable(data){
       <td>${r.trend}</td>
     </tr>`;
   });
+
   html += "</table>";
   output.innerHTML = html;
 }
 
-async function runScan(){
-  output.innerText = "Scanning...";
-  try{
-    const res = await fetch(API + "/scan");
-    const data = await res.json();
-    data.message ? output.innerText = data.message : renderTable(data);
-  }catch(e){
-    output.innerText = "Error connecting to backend";
-  }
+async function loadCached(){
+  output.innerText = "Loading cached data...";
+  const res = await fetch(API + "/cached");
+  const data = await res.json();
+  data.message
+    ? output.innerText = data.message
+    : renderTable(data.results, data);
 }
 
-async function loadDaily(){
-  output.innerText = "Loading daily scan...";
-  try{
-    const res = await fetch(API + "/daily");
-    const data = await res.json();
-    data.message ? output.innerText = data.message : renderTable(data.results);
-  }catch(e){
-    output.innerText = "Error connecting to backend";
-  }
+async function runLatest(){
+  output.innerText =
+    "Running full NSE scan… this may take 20–40 minutes. Please keep this tab open.";
+  const res = await fetch(API + "/scan-latest", { method: "POST" });
+  const data = await res.json();
+  renderTable(data.results, data);
 }
 </script>
+
 
 </body>
 </html>
