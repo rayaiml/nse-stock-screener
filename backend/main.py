@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from scheduler import start_scheduler, save_results
-import json, os
+import json, os, threading
 
 app = FastAPI()
 
@@ -29,8 +29,6 @@ def get_cached():
     with open(RESULT_FILE) as f:
         return json.load(f)
 
-
-import threading
 
 @app.post("/scan-latest")
 def scan_latest():
