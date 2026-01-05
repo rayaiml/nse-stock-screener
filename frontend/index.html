@@ -1,44 +1,131 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NSE Stock Screener</title>
+
 <style>
-body{margin:0;font-family:system-ui;background:#0f172a;color:#e5e7eb}
-header{padding:14px;text-align:center;font-size:18px;font-weight:600}
-.buttons{display:flex;gap:10px;padding:10px;justify-content:center;flex-wrap:wrap}
-button{padding:12px 18px;border:none;border-radius:8px;background:#22c55e;font-weight:600}
-.card{margin:10px;background:#020617;border-radius:12px;padding:10px;overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:900px}
-th,td{padding:10px;border-bottom:1px solid #1e293b;text-align:center}
-th{position:sticky;top:0;background:#020617}
+body{
+  margin:0;
+  font-family:system-ui;
+  background:#0f172a;
+  color:#e5e7eb;
+}
+header{
+  padding:14px;
+  text-align:center;
+  font-size:18px;
+  font-weight:600;
+}
+.buttons{
+  display:flex;
+  gap:12px;
+  padding:12px;
+  justify-content:center;
+}
+button{
+  padding:14px 22px;
+  border:none;
+  border-radius:10px;
+  background:#22c55e;
+  font-weight:700;
+  font-size:15px;
+  cursor:pointer;
+  z-index:10;
+}
+button:active{
+  transform:scale(0.97);
+}
+#output{
+  margin:12px;
+  background:#020617;
+  border-radius:12px;
+  padding:12px;
+  overflow-x:auto;
+  min-height:60px;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:900px;
+}
+th,td{
+  padding:10px;
+  border-bottom:1px solid #1e293b;
+  text-align:center;
+}
+th{
+  background:#020617;
+  position:sticky;
+  top:0;
+}
 </style>
 </head>
+
 <body>
+
 <header>📊 One-Click NSE Stock Screener</header>
+
 <div class="buttons">
-  <button onclick="scan()">Run Scan</button>
-  <button onclick="daily()">Daily Scan</button>
+  <button id="runBtn">Run Scan</button>
+  <button id="dailyBtn">Daily Scan</button>
 </div>
-<div id="out" class="card">Ready</div>
+
+<div id="output">Ready</div>
+
 <script>
-const API = "https://nse-stock-screener.onrender.com";
-function table(data){
- let h="<table><tr><th>Stock</th><th>RSI</th><th>ADX</th><th>MACD</th><th>Vol</th><th>Avg</th><th>BB</th><th>Trend</th></tr>";
- data.forEach(r=>{
-  h+=`<tr><td>${r.stock}</td><td>${r.rsi}</td><td>${r.adx}</td><td>${r.macd}</td>
-      <td>${r.current_volume}</td><td>${r.avg_volume}</td><td>${r.bb}</td><td>${r.trend}</td></tr>`;
- });
- document.getElementById("out").innerHTML=h+"</table>";
+const API = "https://nse-stock-screener-api.onrender.com"; // KEEP YOUR URL
+
+const output = document.getElementById("output");
+
+document.getElementById("runBtn").addEventListener("click", runScan);
+document.getElementById("dailyBtn").addEventListener("click", loadDaily);
+
+function renderTable(data){
+  let html = `<table>
+    <tr>
+      <th>Stock</th><th>RSI</th><th>ADX</th><th>MACD</th>
+      <th>Current Vol</th><th>Avg Vol</th><th>BB</th><th>Trend</th>
+    </tr>`;
+  data.forEach(r=>{
+    html += `<tr>
+      <td>${r.stock}</td>
+      <td>${r.rsi}</td>
+      <td>${r.adx}</td>
+      <td>${r.macd}</td>
+      <td>${r.current_volume}</td>
+      <td>${r.avg_volume}</td>
+      <td>${r.bb}</td>
+      <td>${r.trend}</td>
+    </tr>`;
+  });
+  html += "</table>";
+  output.innerHTML = html;
 }
-async function scan(){
- let r=await fetch(API+"/scan"); let d=await r.json();
- d.message?out.innerText=d.message:table(d);
+
+async function runScan(){
+  output.innerText = "Scanning...";
+  try{
+    const res = await fetch(API + "/scan");
+    const data = await res.json();
+    data.message ? output.innerText = data.message : renderTable(data);
+  }catch(e){
+    output.innerText = "Error connecting to backend";
+  }
 }
-async function daily(){
- let r=await fetch(API+"/daily"); let d=await r.json();
- d.message?out.innerText=d.message:table(d.results);
+
+async function loadDaily(){
+  output.innerText = "Loading daily scan...";
+  try{
+    const res = await fetch(API + "/daily");
+    const data = await res.json();
+    data.message ? output.innerText = data.message : renderTable(data.results);
+  }catch(e){
+    output.innerText = "Error connecting to backend";
+  }
 }
 </script>
+
 </body>
 </html>
