@@ -119,11 +119,17 @@ async function loadCached(){
 
 async function runLatest(){
   output.innerText =
-    "Running full NSE scan… this may take 20–40 minutes. Please keep this tab open.";
-  const res = await fetch(API + "/scan-latest", { method: "POST" });
-  const data = await res.json();
-  renderTable(data.results, data);
+    "Scan started in background. This may take 20–40 minutes.\nYou can close this tab.";
+
+  try {
+    const res = await fetch(API + "/scan-latest", { method: "POST" });
+    const data = await res.json();
+    output.innerText = data.message;
+  } catch (e) {
+    output.innerText = "Failed to start scan. Please try again.";
+  }
 }
+
 </script>
 
 
