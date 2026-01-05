@@ -32,3 +32,4 @@ def save_results(trigger):
             "triggered_by": trigger,
             "completed_at": payload["last_updated"]
         }, f)
+
