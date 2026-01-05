@@ -16,6 +16,8 @@ def scan():
 @app.get("/daily")
 def daily():
     if not os.path.exists("results.json"):
-        return {"message": "Daily scan not executed yet."}
+        return {"message": "Scan not completed yet. Please check after scheduled time."}
+
     with open("results.json") as f:
         return json.load(f)
+
