@@ -1,8 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from scheduler import start_scheduler, save_results
-import json, os, threading
+import os
+import json
+import threading
 
+from scheduler import start_scheduler, save_results
+
+# -----------------------
+# App setup
+# -----------------------
 app = FastAPI()
 
 app.add_middleware(
@@ -12,29 +18,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Start scheduled scans
-start_scheduler()
-
 RESULT_FILE = "results.json"
 
+# -----------------------
+# Start scheduled jobs
+# -----------------------
+start_scheduler()
 
-@app.get("/scan-latest")
+# -----------------------
+# Health / keep-alive
+# -----------------------
+@app.get("/ping")
+def ping():
+    return {"status": "alive"}
+
+# -----------------------
+# Quick scan (cached data)
+# -----------------------
+@app.get("/cached")
 def get_cached():
-    """
-    FAST: Read last cached scan
-    """
     if not os.path.exists(RESULT_FILE):
-        return {"message": "No cached data available yet."}
+        return {
+            "message": "No cached data available yet. Please wait for scheduled scan."
+        }
 
-    with open(RESULT_FILE) as f:
+    with open(RESULT_FILE, "r") as f:
         return json.load(f)
 
-
+# -----------------------
+# Manual full NSE scan (BACKGROUND)
+# -----------------------
 @app.post("/scan-latest")
 def scan_latest():
     """
-    Trigger full NSE scan in background
+    Starts full NSE scan in background.
+    Returns immediately to avoid browser timeout.
     """
+
     threading.Thread(
         target=save_results,
         args=("MANUAL",),
@@ -42,9 +62,9 @@ def scan_latest():
     ).start()
 
     return {
-        "message": "Scan started in background. Results will be updated when complete."
+        "message": (
+            "Full NSE scan started in background. "
+            "This may take 20–40 minutes. "
+            "Please use 'Quick Scan (Cached)' later to view results."
+        )
     }
-
-@app.get("/ping")
-def ping():
-    return {"status": "alive"}
