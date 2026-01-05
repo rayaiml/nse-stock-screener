@@ -66,6 +66,10 @@ th{
 <body>
 
 <header>📊 One-Click NSE Stock Screener</header>
+  
+<div id="scanStatus" style="text-align:center; margin:8px; font-weight:600;">
+  Scan status: Idle
+</div>
 
 <div class="buttons">
   <button id="cachedBtn">Quick Scan (Cached)</button>
@@ -117,18 +121,49 @@ async function loadCached(){
     : renderTable(data.results, data);
 }
 
-async function runLatest(){
+async function runLatest() {
   output.innerText =
-    "Scan started in background. This may take 20–40 minutes.\nYou can close this tab.";
+    "Scan started in background. This may take 20–40 minutes.";
 
   try {
-    const res = await fetch(API + "/scan-latest", { method: "POST" });
-    const data = await res.json();
-    output.innerText = data.message;
+    await fetch(API + "/scan-latest", { method: "POST" });
+    checkStatus(); // immediately update UI
   } catch (e) {
-    output.innerText = "Failed to start scan. Please try again.";
+    output.innerText = "Failed to start scan.";
   }
 }
+
+const statusDiv = document.getElementById("scanStatus");
+const latestBtn = document.getElementById("latestBtn");
+
+async function checkStatus() {
+  try {
+    const res = await fetch(API + "/status");
+    const s = await res.json();
+
+    if (s.status === "RUNNING") {
+      statusDiv.innerText =
+        `🟡 Scan running (started at ${s.started_at})`;
+      latestBtn.disabled = true;
+      latestBtn.style.opacity = 0.6;
+    } else {
+      statusDiv.innerText =
+        s.completed_at
+          ? `🟢 Scan completed at ${s.completed_at}`
+          : "Scan status: Idle";
+      latestBtn.disabled = false;
+      latestBtn.style.opacity = 1;
+    }
+  } catch (e) {
+    statusDiv.innerText = "⚠ Unable to check scan status";
+  }
+}
+
+// check every 60 seconds
+setInterval(checkStatus, 60000);
+
+// check immediately on page load
+checkStatus();
 
 </script>
 
