@@ -87,3 +87,4 @@ def scan_status():
 
     with open(STATUS_FILE, "r") as f:
         return json.load(f)
+
