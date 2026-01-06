@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>NSE Stock Screener</title>
+<script src="https://s3.tradingview.com/tv.js"></script>
+</head>
+<body>
+
+<h2>NSE Stock Screener</h2>
+<button onclick="load()">Scan Stocks</button>
+
+<table border="1">
+<thead>
+<tr>
+<th>Stock</th><th>RSI</th><th>ADX</th><th>MACD</th>
+<th>Volume</th><th>Avg Vol</th><th>BB</th><th>Trend</th>
+</tr>
+</thead>
+<tbody id="tb"></tbody>
+</table>
+
+<div id="chart"></div>
+
+<script>
+function load(){
+fetch("https://nse-stock-screener.onrender.com/scan")
+.then(r=>r.json())
+.then(d=>{
+const tb=document.getElementById("tb");
+tb.innerHTML="";
+if(!d.length){
+tb.innerHTML="<tr><td colspan='8'>No stocks match</td></tr>";
+return;
+}
+d.forEach(s=>{
+tb.innerHTML+=`
+<tr>
+<td><a href="#" onclick="chart('${s.stock}')">${s.stock}</a></td>
+<td>${s.rsi}</td><td>${s.adx}</td><td>${s.macd}</td>
+<td>${s.volume}</td><td>${s.avg_volume}</td>
+<td>${s.bb}</td><td>${s.trend}</td>
+</tr>`;
+});
+});
+}
+
+function chart(sym){
+document.getElementById("chart").innerHTML="";
+new TradingView.widget({
+container_id:"chart",
+symbol:"NSE:"+sym,
+interval:"D",
+autosize:true,
+studies:["EMA@tv-basicstudies","MACD@tv-basicstudies","RSI@tv-basicstudies","BB@tv-basicstudies"]
+});
+}
+</script>
+</body>
+</html>
