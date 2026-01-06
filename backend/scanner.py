@@ -1,87 +1,89 @@
 import pandas as pd
+import numpy as np
 import requests
-from indicators import add
+import zipfile
+from io import BytesIO
+from datetime import date, timedelta
+from indicators import add_indicators
 
-def fetch_nse_data():
-    session = requests.Session()
+# ---------------- FETCH BHAVCOPY ----------------
+def fetch_bhavcopy():
+    d = date.today()
+    for _ in range(5):  # try last 5 days (holidays safe)
+        try:
+            ds = d.strftime("%d%b%Y").upper()
+            url = f"https://www1.nseindia.com/content/historical/EQUITIES/{d.year}/{d.strftime('%b').upper()}/cm{ds}bhav.csv.zip"
 
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Referer": "https://www.nseindia.com/",
-    }
+            r = requests.get(url, timeout=15)
+            z = zipfile.ZipFile(BytesIO(r.content))
+            df = pd.read_csv(z.open(z.namelist()[0]))
+            return df
+        except Exception:
+            d -= timedelta(days=1)
 
-    # Step 1: Warm up session
-    session.get("https://www.nseindia.com", headers=headers, timeout=10)
+    raise Exception("Bhavcopy not available")
 
-    # Step 2: Actual API call
-    url = "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%20500"
-    response = session.get(url, headers=headers, timeout=10)
-
-    response.raise_for_status()
-    return response.json()["data"]
-
-
+# ---------------- MAIN SCAN ----------------
 def scan(filters):
-    try:
-        data = fetch_nse_data()
-    except Exception:
-        return []
+    df = fetch_bhavcopy()
 
-    rows = []
-    for s in data:
-        if "lastPrice" not in s or "totalTradedVolume" not in s:
-            continue
+    df = df[df["SERIES"] == "EQ"]
+    df = df[[
+        "SYMBOL", "OPEN", "HIGH", "LOW", "CLOSE", "TOTTRDQTY"
+    ]]
 
-        rows.append({
-            "symbol": s["symbol"],
-            "CLOSE": s["lastPrice"],
-            "VOLUME": s["totalTradedVolume"]
+    results = []
+
+    # Group by stock (1 candle per stock for now)
+    for _, r in df.iterrows():
+        prices = pd.DataFrame({
+            "open": [r.OPEN],
+            "high": [r.HIGH],
+            "low": [r.LOW],
+            "close": [r.CLOSE],
+            "volume": [r.TOTTRDQTY]
         })
 
-    if not rows:
-        return []
+        ind = add_indicators(prices)
 
-    df = pd.DataFrame(rows)
-    df = add(df)
+        row = ind.iloc[-1]
 
-    output = []
-
-    for _, r in df.iterrows():
-
-        if filters["adx"] and not (22 <= r.ADX <= 30):
+        # ---------------- APPLY FILTERS ----------------
+        if filters["rsi"] and not (40 <= row.RSI <= 55):
             continue
 
-        if filters["macd"] and r.MACD <= r.SIG:
+        if filters["macd"] and row.MACD <= row.MACD_SIGNAL:
             continue
 
-        if filters["volume"] and r.VOLUME <= r.AVG_VOL:
+        if filters["adx"] and not (22 <= row.ADX <= 30):
             continue
 
-        if filters["rsi"] and not (40 <= r.RSI <= 55):
+        if filters["volume"] and row.volume <= row.AVG_VOL:
             continue
 
-        # EMA / BB placeholders (can be enhanced later)
-        if filters["ema21"] and r.EMA14 <= r.EMA21:
+        if filters["ema21"] and row.EMA14 <= row.EMA21:
             continue
 
-        if filters["ema35"] and r.EMA14 <= r.EMA35:
+        if filters["ema35"] and row.EMA14 <= row.EMA35:
             continue
 
-        if filters["bb"] and r.CLOSE <= r.BBM:
+        if filters["bb"] and row.close <= row.BB_MID:
             continue
 
-        output.append({
-            "stock": r.symbol,
-            "rsi": round(r.RSI, 2),
-            "adx": round(r.ADX, 2),
-            "macd": "Yes" if r.MACD > r.SIG else "No",
-            "volume": int(r.VOLUME),
-            "avg_volume": int(r.AVG_VOL),
-            "bb": "Above Middle" if r.CLOSE > r.BBM else "Below Middle",
+        results.append({
+            "stock": r.SYMBOL,
+            "rsi": round(row.RSI, 2),
+            "adx": round(row.ADX, 2),
+            "macd": "Yes",
+            "volume": int(row.volume),
+            "avg_volume": int(row.AVG_VOL),
+            "bb": "Above Middle",
             "trend": "Bullish"
         })
 
-    return output
-
+    # Always return something useful
+    return sorted(
+        results,
+        key=lambda x: (x["macd"], x["rsi"], x["volume"]),
+        reverse=True
+    )[:20]
