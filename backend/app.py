@@ -5,10 +5,6 @@ from scanner import scan
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/")
-def home():
-    return {"status": "OK", "endpoint": "/scan"}
-
 @app.route("/scan")
 def run_scan():
     return jsonify(scan())
