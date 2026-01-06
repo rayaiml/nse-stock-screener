@@ -33,38 +33,73 @@
 <div id="chart"></div>
 
 <script>
+let rawData = [];
+
 function load(){
-fetch("https://nse-stock-screener.onrender.com/scan")
-.then(r=>r.json())
-.then(d=>{
-const tb=document.getElementById("tb");
-tb.innerHTML="";
-if(!d.length){
-tb.innerHTML="<tr><td colspan='8'>No stocks match</td></tr>";
-return;
-}
-d.forEach(s=>{
-tb.innerHTML+=`
-<tr>
-<td><a href="#" onclick="chart('${s.stock}')">${s.stock}</a></td>
-<td>${s.rsi}</td><td>${s.adx}</td><td>${s.macd}</td>
-<td>${s.volume}</td><td>${s.avg_volume}</td>
-<td>${s.bb}</td><td>${s.trend}</td>
-</tr>`;
-});
-});
+  fetch("https://nse-stock-screener.onrender.com/scan")
+    .then(r => r.json())
+    .then(data => {
+      rawData = data;
+      applyFilters();
+    })
+    .catch(err => {
+      alert("Backend not ready. Try again.");
+      console.error(err);
+    });
 }
 
-function chart(sym){
-document.getElementById("chart").innerHTML="";
-new TradingView.widget({
-container_id:"chart",
-symbol:"NSE:"+sym,
-interval:"D",
-autosize:true,
-studies:["EMA@tv-basicstudies","MACD@tv-basicstudies","RSI@tv-basicstudies","BB@tv-basicstudies"]
-});
+function applyFilters(){
+  const tb = document.getElementById("tb");
+  tb.innerHTML = "";
+
+  let filtered = rawData.filter(s => {
+
+    if (document.getElementById("f_adx").checked) {
+      if (!(s.adx >= 22 && s.adx <= 30)) return false;
+    }
+
+    if (document.getElementById("f_macd").checked) {
+      if (s.macd !== "Yes") return false;
+    }
+
+    if (document.getElementById("f_vol").checked) {
+      if (s.volume <= s.avg_volume) return false;
+    }
+
+    if (document.getElementById("f_rsi").checked) {
+      if (!(s.rsi >= 40 && s.rsi <= 55)) return false;
+    }
+
+    return true;
+  });
+
+  if (!filtered.length) {
+    tb.innerHTML = "<tr><td colspan='8'>No stocks currently meet your requirements</td></tr>";
+    return;
+  }
+
+  filtered.forEach(s => {
+    tb.innerHTML += `
+      <tr>
+        <td><a href="#" onclick="chart('${s.stock}')">${s.stock}</a></td>
+        <td>${s.rsi}</td>
+        <td>${s.adx}</td>
+        <td>${s.macd}</td>
+        <td>${s.volume}</td>
+        <td>${s.avg_volume}</td>
+        <td>${s.bb}</td>
+        <td>${s.trend}</td>
+      </tr>
+    `;
+  });
 }
 </script>
+
+<script>
+document.querySelectorAll("#filters input").forEach(cb => {
+  cb.addEventListener("change", applyFilters);
+});
+</script>
+
 </body>
 </html>
