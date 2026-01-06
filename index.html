@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NSE Stock Screener</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://s3.tradingview.com/tv.js"></script>
+</head>
+<body>
+
+<h2>📊 NSE Stock Screener</h2>
+
+<div class="filters">
+  <label><input type="checkbox" checked> ADX 22–30</label>
+  <label><input type="checkbox" checked> MACD Bullish</label>
+  <label><input type="checkbox" checked> Volume > Avg</label>
+  <label><input type="checkbox" checked> EMA Conditions</label>
+  <label><input type="checkbox" checked> Bollinger Basis</label>
+</div>
+
+<button onclick="scanStocks()">🔍 Scan Stocks</button>
+
+<p id="result"></p>
+
+<table id="stockTable">
+  <thead>
+    <tr>
+      <th>Stock</th>
+      <th>RSI</th>
+      <th>ADX</th>
+      <th>MACD</th>
+      <th>Current Volume</th>
+      <th>Avg Volume</th>
+      <th>BB</th>
+      <th>Trend</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div id="chart"></div>
+
+<script src="stocks.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
