@@ -1,56 +1,61 @@
-function scanStocks() {
-  const tbody = document.querySelector("#stockTable tbody");
-  const result = document.getElementById("result");
-  tbody.innerHTML = "";
-  result.innerText = "";
+import pandas as pd
+import numpy as np
 
-  let found = false;
+def ema(series, period):
+    return series.ewm(span=period, adjust=False).mean()
 
-  STOCKS.forEach(stock => {
-    const rsi = (40 + Math.random() * 15).toFixed(2);
-    const adx = (22 + Math.random() * 8).toFixed(2);
-    const macd = Math.random() > 0.3;
-    const vol = Math.floor(Math.random() * 5000000);
-    const avgVol = Math.floor(vol * 0.75);
-    const bb = ["Upper", "Middle", "Lower"][Math.floor(Math.random() * 3)];
+def rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
 
-    if (adx < 22 || adx > 30 || !macd || vol <= avgVol) return;
+def macd(series):
+    ema12 = ema(series, 12)
+    ema26 = ema(series, 26)
+    macd_line = ema12 - ema26
+    signal = ema(macd_line, 9)
+    return macd_line, signal
 
-    found = true;
+def adx(high, low, close, period=14):
+    plus_dm = high.diff()
+    minus_dm = low.diff() * -1
 
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td><a href="#" onclick="loadChart('${stock}')">${stock}</a></td>
-      <td>${rsi}</td>
-      <td>${adx}</td>
-      <td>${macd ? "Yes" : "No"}</td>
-      <td>${vol}</td>
-      <td>${avgVol}</td>
-      <td>${bb}</td>
-      <td>Bullish</td>
-    `;
-    tbody.appendChild(row);
-  });
+    plus_dm[plus_dm < 0] = 0
+    minus_dm[minus_dm < 0] = 0
 
-  if (!found) {
-    result.innerText = "❌ No stocks currently meet your requirements.";
-  }
-}
+    tr = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low - close.shift()).abs()
+    ], axis=1).max(axis=1)
 
-function loadChart(stock) {
-  document.getElementById("chart").innerHTML = "";
-  new TradingView.widget({
-    container_id: "chart",
-    symbol: "NSE:" + stock,
-    interval: "D",
-    autosize: true,
-    theme: "light",
-    studies: [
-      "EMA@tv-basicstudies",
-      "MACD@tv-basicstudies",
-      "RSI@tv-basicstudies",
-      "BB@tv-basicstudies",
-      "ADX@tv-basicstudies"
-    ]
-  });
-}
+    atr = tr.rolling(period).mean()
+
+    plus_di = 100 * (plus_dm.rolling(period).mean() / atr)
+    minus_di = 100 * (minus_dm.rolling(period).mean() / atr)
+
+    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
+    return dx.rolling(period).mean()
+
+def add(df):
+    df["EMA14"] = ema(df["CLOSE"], 14)
+    df["EMA21"] = ema(df["CLOSE"], 21)
+    df["EMA35"] = ema(df["CLOSE"], 35)
+    df["EMA50"] = ema(df["CLOSE"], 50)
+    df["EMA200"] = ema(df["CLOSE"], 200)
+
+    df["RSI"] = rsi(df["CLOSE"])
+
+    df["MACD"], df["SIG"] = macd(df["CLOSE"])
+
+    df["ADX"] = adx(df["HIGH"], df["LOW"], df["CLOSE"])
+
+    df["BBM"] = df["CLOSE"].rolling(20).mean()
+
+    df["AVG_VOL"] = df["TOTTRDQTY"].rolling(21).mean()
+
+    return df
