@@ -1,7 +1,7 @@
 
 import pandas as pd
 
-DATA_URL = "https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/nse-stock-screener/main/data/latest.csv"
+DATA_URL = "https://raw.githubusercontent.com/rayaiml/nse-stock-screener/main/data/latest.csv"
 
 def scan(filters):
     df = pd.read_csv(DATA_URL)
