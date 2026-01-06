@@ -86,9 +86,8 @@ function applyFilters() {
   const noFilters =
     !f_adx && !f_macd && !f_vol && !f_ema21 && !f_ema35 && !f_bb && !f_rsi;
 
-  const filtered = rawData.filter(s => {
+  let filtered = rawData.filter(s => {
 
-    // ✅ SHOW ALL if no filters selected
     if (noFilters) return true;
 
     if (f_adx && !(s.adx >= 22 && s.adx <= 30)) return false;
@@ -96,18 +95,36 @@ function applyFilters() {
     if (f_vol && s.volume <= s.avg_volume) return false;
     if (f_rsi && !(s.rsi >= 40 && s.rsi <= 55)) return false;
 
-    // EMA / BB info currently inferred from backend trend fields
-    if (f_ema21 && !s.trend.toLowerCase().includes("bullish")) return false;
-    if (f_ema35 && !s.trend.toLowerCase().includes("bullish")) return false;
-    if (f_bb && !s.bb.toLowerCase().includes("middle")) return false;
-
     return true;
   });
 
+  // ✅ FALLBACK: SHOW TOP 10 IF NOTHING MATCHES
+  let fallback = false;
+  if (filtered.length === 0 && rawData.length > 0) {
+    fallback = true;
+
+    filtered = [...rawData]
+      .sort((a, b) => {
+        if (a.macd !== b.macd) return a.macd === "Yes" ? -1 : 1;
+        if (b.rsi !== a.rsi) return b.rsi - a.rsi;
+        return b.volume - a.volume;
+      })
+      .slice(0, 10);
+  }
+
   if (!filtered.length) {
     tb.innerHTML =
-      "<tr><td colspan='8'>No stocks currently meet your requirements</td></tr>";
+      "<tr><td colspan='8'>No stocks available</td></tr>";
     return;
+  }
+
+  if (fallback) {
+    tb.innerHTML += `
+      <tr>
+        <td colspan="8" style="background:#ffeeba;font-weight:bold;">
+          Showing Top 10 stocks (filters relaxed)
+        </td>
+      </tr>`;
   }
 
   filtered.forEach(s => {
