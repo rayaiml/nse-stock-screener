@@ -11,8 +11,7 @@ def home():
 
 @app.route("/scan")
 def run_scan():
-    return jsonify(scan({}))
+    return jsonify(scan())
 
 if __name__ == "__main__":
     app.run()
-
