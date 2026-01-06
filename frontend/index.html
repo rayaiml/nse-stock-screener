@@ -1,87 +1,119 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>NSE Stock Screener</title>
-<script src="https://s3.tradingview.com/tv.js"></script>
+  <meta charset="UTF-8" />
+  <title>NSE Stock Screener</title>
+  <script src="https://s3.tradingview.com/tv.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; padding: 10px; }
+    table { border-collapse: collapse; margin-top: 10px; width: 100%; }
+    th, td { border: 1px solid #333; padding: 4px; text-align: center; }
+    th { background: #eee; }
+    #filters label { display: block; }
+    #chart { margin-top: 20px; height: 500px; }
+  </style>
 </head>
+
 <body>
 
 <h2>NSE Stock Screener</h2>
+
 <h3>Filters</h3>
 <div id="filters">
-  <label><input type="checkbox" id="f_adx" checked> ADX 22–30</label><br>
-  <label><input type="checkbox" id="f_macd" checked> MACD &gt; Signal</label><br>
-  <label><input type="checkbox" id="f_vol" checked> Volume &gt; Avg Volume</label><br>
-  <label><input type="checkbox" id="f_ema21" checked> EMA14 &gt; EMA21</label><br>
-  <label><input type="checkbox" id="f_ema35" checked> EMA14 &gt; EMA35</label><br>
-  <label><input type="checkbox" id="f_bb" checked> Price &gt; BB Middle</label><br>
+  <label><input type="checkbox" id="f_adx" checked> ADX 22–30</label>
+  <label><input type="checkbox" id="f_macd" checked> MACD &gt; Signal</label>
+  <label><input type="checkbox" id="f_vol" checked> Volume &gt; Avg Volume</label>
+  <label><input type="checkbox" id="f_ema21" checked> EMA14 &gt; EMA21</label>
+  <label><input type="checkbox" id="f_ema35" checked> EMA14 &gt; EMA35</label>
+  <label><input type="checkbox" id="f_bb" checked> Price &gt; BB Middle</label>
   <label><input type="checkbox" id="f_rsi" checked> RSI 40–55</label>
 </div>
-<hr>
-<button onclick="load()">Scan Stocks</button>
 
-<table border="1">
-<thead>
-<tr>
-<th>Stock</th><th>RSI</th><th>ADX</th><th>MACD</th>
-<th>Volume</th><th>Avg Vol</th><th>BB</th><th>Trend</th>
-</tr>
-</thead>
-<tbody id="tb"></tbody>
+<button onclick="loadData()">Scan Stocks</button>
+
+<table>
+  <thead>
+    <tr>
+      <th>Stock</th>
+      <th>RSI</th>
+      <th>ADX</th>
+      <th>MACD</th>
+      <th>Volume</th>
+      <th>Avg Vol</th>
+      <th>BB</th>
+      <th>Trend</th>
+    </tr>
+  </thead>
+  <tbody id="tb">
+    <tr><td colspan="8">Click "Scan Stocks"</td></tr>
+  </tbody>
 </table>
 
 <div id="chart"></div>
 
 <script>
+const API_URL = "https://nse-stock-screener.onrender.com/scan";
 let rawData = [];
 
-function load(){
-  fetch("https://nse-stock-screener.onrender.com/scan")
-    .then(r => r.json())
+// ---------------- LOAD DATA ----------------
+function loadData() {
+  fetch(API_URL)
+    .then(res => res.json())
     .then(data => {
-      rawData = data;
+      rawData = data || [];
       applyFilters();
     })
     .catch(err => {
-      alert("Backend not ready. Try again.");
+      alert("Backend not reachable. Try again.");
       console.error(err);
     });
 }
 
-function applyFilters(){
+// ---------------- APPLY FILTERS ----------------
+function applyFilters() {
   const tb = document.getElementById("tb");
   tb.innerHTML = "";
 
-  let filtered = rawData.filter(s => {
+  const f_adx   = document.getElementById("f_adx").checked;
+  const f_macd  = document.getElementById("f_macd").checked;
+  const f_vol   = document.getElementById("f_vol").checked;
+  const f_ema21 = document.getElementById("f_ema21").checked;
+  const f_ema35 = document.getElementById("f_ema35").checked;
+  const f_bb    = document.getElementById("f_bb").checked;
+  const f_rsi   = document.getElementById("f_rsi").checked;
 
-    if (document.getElementById("f_adx").checked) {
-      if (!(s.adx >= 22 && s.adx <= 30)) return false;
-    }
+  const noFilters =
+    !f_adx && !f_macd && !f_vol && !f_ema21 && !f_ema35 && !f_bb && !f_rsi;
 
-    if (document.getElementById("f_macd").checked) {
-      if (s.macd !== "Yes") return false;
-    }
+  const filtered = rawData.filter(s => {
 
-    if (document.getElementById("f_vol").checked) {
-      if (s.volume <= s.avg_volume) return false;
-    }
+    // ✅ SHOW ALL if no filters selected
+    if (noFilters) return true;
 
-    if (document.getElementById("f_rsi").checked) {
-      if (!(s.rsi >= 40 && s.rsi <= 55)) return false;
-    }
+    if (f_adx && !(s.adx >= 22 && s.adx <= 30)) return false;
+    if (f_macd && s.macd !== "Yes") return false;
+    if (f_vol && s.volume <= s.avg_volume) return false;
+    if (f_rsi && !(s.rsi >= 40 && s.rsi <= 55)) return false;
+
+    // EMA / BB info currently inferred from backend trend fields
+    if (f_ema21 && !s.trend.toLowerCase().includes("bullish")) return false;
+    if (f_ema35 && !s.trend.toLowerCase().includes("bullish")) return false;
+    if (f_bb && !s.bb.toLowerCase().includes("middle")) return false;
 
     return true;
   });
 
   if (!filtered.length) {
-    tb.innerHTML = "<tr><td colspan='8'>No stocks currently meet your requirements</td></tr>";
+    tb.innerHTML =
+      "<tr><td colspan='8'>No stocks currently meet your requirements</td></tr>";
     return;
   }
 
   filtered.forEach(s => {
     tb.innerHTML += `
       <tr>
-        <td><a href="#" onclick="chart('${s.stock}')">${s.stock}</a></td>
+        <td><a href="#" onclick="loadChart('${s.stock}')">${s.stock}</a></td>
         <td>${s.rsi}</td>
         <td>${s.adx}</td>
         <td>${s.macd}</td>
@@ -93,12 +125,30 @@ function applyFilters(){
     `;
   });
 }
-</script>
 
-<script>
+// ---------------- AUTO UPDATE ON TOGGLE ----------------
 document.querySelectorAll("#filters input").forEach(cb => {
   cb.addEventListener("change", applyFilters);
 });
+
+// ---------------- TRADINGVIEW CHART ----------------
+function loadChart(symbol) {
+  document.getElementById("chart").innerHTML = "";
+
+  new TradingView.widget({
+    container_id: "chart",
+    symbol: "NSE:" + symbol,
+    interval: "D",
+    autosize: true,
+    studies: [
+      "EMA@tv-basicstudies",
+      "EMA@tv-basicstudies",
+      "MACD@tv-basicstudies",
+      "RSI@tv-basicstudies",
+      "BB@tv-basicstudies"
+    ]
+  });
+}
 </script>
 
 </body>
