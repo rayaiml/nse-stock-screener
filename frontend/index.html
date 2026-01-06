@@ -7,6 +7,17 @@
 <body>
 
 <h2>NSE Stock Screener</h2>
+<h3>Filters</h3>
+<div id="filters">
+  <label><input type="checkbox" id="f_adx" checked> ADX 22–30</label><br>
+  <label><input type="checkbox" id="f_macd" checked> MACD &gt; Signal</label><br>
+  <label><input type="checkbox" id="f_vol" checked> Volume &gt; Avg Volume</label><br>
+  <label><input type="checkbox" id="f_ema21" checked> EMA14 &gt; EMA21</label><br>
+  <label><input type="checkbox" id="f_ema35" checked> EMA14 &gt; EMA35</label><br>
+  <label><input type="checkbox" id="f_bb" checked> Price &gt; BB Middle</label><br>
+  <label><input type="checkbox" id="f_rsi" checked> RSI 40–55</label>
+</div>
+<hr>
 <button onclick="load()">Scan Stocks</button>
 
 <table border="1">
