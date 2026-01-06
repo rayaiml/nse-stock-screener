@@ -3,15 +3,50 @@
 <head>
   <meta charset="UTF-8" />
   <title>NSE Stock Screener</title>
+
+  <!-- TradingView -->
   <script src="https://s3.tradingview.com/tv.js"></script>
 
   <style>
-    body { font-family: Arial, sans-serif; padding: 10px; }
-    table { border-collapse: collapse; margin-top: 10px; width: 100%; }
-    th, td { border: 1px solid #333; padding: 4px; text-align: center; }
-    th { background: #eee; }
-    #filters label { display: block; }
-    #chart { margin-top: 20px; height: 500px; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 10px;
+    }
+
+    h2, h3 {
+      margin-bottom: 5px;
+    }
+
+    #filters label {
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    button {
+      margin-top: 8px;
+      padding: 5px 10px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1px solid #333;
+      padding: 4px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #eee;
+    }
+
+    #chart {
+      margin-top: 20px;
+      height: 500px;
+    }
   </style>
 </head>
 
@@ -46,91 +81,56 @@
     </tr>
   </thead>
   <tbody id="tb">
-    <tr><td colspan="8">Click "Scan Stocks"</td></tr>
+    <tr>
+      <td colspan="8">Click "Scan Stocks"</td>
+    </tr>
   </tbody>
 </table>
 
 <div id="chart"></div>
 
 <script>
-const API_URL = "https://nse-stock-screener.onrender.com/scan";
-let rawData = [];
+const API_BASE = "https://nse-stock-screener.onrender.com/scan";
 
-// ---------------- LOAD DATA ----------------
+// ---------------- FETCH FROM BACKEND WITH FILTER FLAGS ----------------
 function loadData() {
-  fetch(API_URL)
+  const params = new URLSearchParams({
+    adx: document.getElementById("f_adx").checked ? 1 : 0,
+    macd: document.getElementById("f_macd").checked ? 1 : 0,
+    volume: document.getElementById("f_vol").checked ? 1 : 0,
+    ema21: document.getElementById("f_ema21").checked ? 1 : 0,
+    ema35: document.getElementById("f_ema35").checked ? 1 : 0,
+    bb: document.getElementById("f_bb").checked ? 1 : 0,
+    rsi: document.getElementById("f_rsi").checked ? 1 : 0
+  });
+
+  fetch(`${API_BASE}?${params.toString()}`)
     .then(res => res.json())
-    .then(data => {
-      rawData = data || [];
-      applyFilters();
-    })
+    .then(data => renderTable(data))
     .catch(err => {
-      alert("Backend not reachable. Try again.");
       console.error(err);
+      alert("Backend error. Please try again.");
     });
 }
 
-// ---------------- APPLY FILTERS ----------------
-function applyFilters() {
+// ---------------- RENDER TABLE ----------------
+function renderTable(data) {
   const tb = document.getElementById("tb");
   tb.innerHTML = "";
 
-  const f_adx   = document.getElementById("f_adx").checked;
-  const f_macd  = document.getElementById("f_macd").checked;
-  const f_vol   = document.getElementById("f_vol").checked;
-  const f_ema21 = document.getElementById("f_ema21").checked;
-  const f_ema35 = document.getElementById("f_ema35").checked;
-  const f_bb    = document.getElementById("f_bb").checked;
-  const f_rsi   = document.getElementById("f_rsi").checked;
-
-  const noFilters =
-    !f_adx && !f_macd && !f_vol && !f_ema21 && !f_ema35 && !f_bb && !f_rsi;
-
-  let filtered = rawData.filter(s => {
-
-    if (noFilters) return true;
-
-    if (f_adx && !(s.adx >= 22 && s.adx <= 30)) return false;
-    if (f_macd && s.macd !== "Yes") return false;
-    if (f_vol && s.volume <= s.avg_volume) return false;
-    if (f_rsi && !(s.rsi >= 40 && s.rsi <= 55)) return false;
-
-    return true;
-  });
-
-  // ✅ FALLBACK: SHOW TOP 10 IF NOTHING MATCHES
-  let fallback = false;
-  if (filtered.length === 0 && rawData.length > 0) {
-    fallback = true;
-
-    filtered = [...rawData]
-      .sort((a, b) => {
-        if (a.macd !== b.macd) return a.macd === "Yes" ? -1 : 1;
-        if (b.rsi !== a.rsi) return b.rsi - a.rsi;
-        return b.volume - a.volume;
-      })
-      .slice(0, 10);
-  }
-
-  if (!filtered.length) {
+  if (!data || data.length === 0) {
     tb.innerHTML =
-      "<tr><td colspan='8'>No stocks available</td></tr>";
+      "<tr><td colspan='8'>No stocks match selected filters</td></tr>";
     return;
   }
 
-  if (fallback) {
+  // show max 10 rows
+  data.slice(0, 10).forEach(s => {
     tb.innerHTML += `
       <tr>
-        <td colspan="8" style="background:#ffeeba;font-weight:bold;">
-          Showing Top 10 stocks (filters relaxed)
+        <td>
+          <a href="#" onclick="loadChart('${s.stock}')">${s.stock}</a>
         </td>
-      </tr>`;
-  }
-
-  filtered.forEach(s => {
-    tb.innerHTML += `
-      <tr>
-        <td><a href="#" onclick="loadChart('${s.stock}')">${s.stock}</a></td>
         <td>${s.rsi}</td>
         <td>${s.adx}</td>
         <td>${s.macd}</td>
@@ -143,9 +143,9 @@ function applyFilters() {
   });
 }
 
-// ---------------- AUTO UPDATE ON TOGGLE ----------------
+// ---------------- AUTO RESCAN ON FILTER CHANGE ----------------
 document.querySelectorAll("#filters input").forEach(cb => {
-  cb.addEventListener("change", applyFilters);
+  cb.addEventListener("change", loadData);
 });
 
 // ---------------- TRADINGVIEW CHART ----------------
