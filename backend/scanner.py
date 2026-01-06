@@ -35,6 +35,7 @@ def scan(filters):
         print("Bhavcopy fetch failed:", e)
         return []
 
+    
     df = df[df["SERIES"] == "EQ"]
 
     results = []
