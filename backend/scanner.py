@@ -23,12 +23,11 @@ def fetch_nse_data():
     return response.json()["data"]
 
 
-def scan():
+def scan(filters):
     try:
         data = fetch_nse_data()
-    except Exception as e:
-        print("NSE fetch failed:", e)
-        return []   # IMPORTANT: don't crash app
+    except Exception:
+        return []
 
     rows = []
     for s in data:
@@ -48,17 +47,41 @@ def scan():
     df = add(df)
 
     output = []
+
     for _, r in df.iterrows():
-        if r.MACD > r.SIG:
-            output.append({
-                "stock": r.symbol,
-                "rsi": round(r.RSI, 2),
-                "adx": "NA",
-                "macd": "Yes",
-                "volume": int(r.VOLUME),
-                "avg_volume": int(r.AVG_VOL),
-                "bb": "Middle",
-                "trend": "Bullish"
-            })
+
+        if filters["adx"] and not (22 <= r.ADX <= 30):
+            continue
+
+        if filters["macd"] and r.MACD <= r.SIG:
+            continue
+
+        if filters["volume"] and r.VOLUME <= r.AVG_VOL:
+            continue
+
+        if filters["rsi"] and not (40 <= r.RSI <= 55):
+            continue
+
+        # EMA / BB placeholders (can be enhanced later)
+        if filters["ema21"] and r.EMA14 <= r.EMA21:
+            continue
+
+        if filters["ema35"] and r.EMA14 <= r.EMA35:
+            continue
+
+        if filters["bb"] and r.CLOSE <= r.BBM:
+            continue
+
+        output.append({
+            "stock": r.symbol,
+            "rsi": round(r.RSI, 2),
+            "adx": round(r.ADX, 2),
+            "macd": "Yes" if r.MACD > r.SIG else "No",
+            "volume": int(r.VOLUME),
+            "avg_volume": int(r.AVG_VOL),
+            "bb": "Above Middle" if r.CLOSE > r.BBM else "Below Middle",
+            "trend": "Bullish"
+        })
 
     return output
+
