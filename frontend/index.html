@@ -1,23 +1,30 @@
-
 <!DOCTYPE html>
 <html>
-<head><title>NSE Stock Screener</title></head>
+<head>
+  <title>NSE Stock Screener</title>
+</head>
 <body>
+
 <h2>NSE Stock Screener</h2>
-<label><input type="checkbox" id="volume" checked> Volume > Avg</label>
-<button onclick="scan()">Scan</button>
-<table border="1" id="tbl"><tr><th>Stock</th><th>Volume</th></tr></table>
+<button onclick="scan()">Scan Stocks</button>
+
+<table border="1" id="tbl">
+<tr><th>Stock</th><th>Volume</th></tr>
+</table>
+
 <script>
-function scan(){
-  const v = document.getElementById("volume").checked ? 1 : 0;
-  fetch("https://YOUR_RENDER_URL/scan?volume=" + v)
-    .then(r=>r.json())
-    .then(d=>{
-      const t=document.getElementById("tbl");
-      t.innerHTML="<tr><th>Stock</th><th>Volume</th></tr>";
-      d.forEach(s=>t.innerHTML+=`<tr><td>${s.stock}</td><td>${s.volume}</td></tr>`);
+function scan() {
+  fetch("https://nse-stock-screener.onrender.com/scan")
+    .then(r => r.json())
+    .then(d => {
+      const t = document.getElementById("tbl");
+      t.innerHTML = "<tr><th>Stock</th><th>Volume</th></tr>";
+      d.forEach(s => {
+        t.innerHTML += `<tr><td>${s.stock}</td><td>${s.volume}</td></tr>`;
+      });
     });
 }
 </script>
+
 </body>
 </html>
