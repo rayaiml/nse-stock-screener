@@ -1,58 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
   <title>NSE Stock Screener</title>
-
-  <!-- TradingView -->
-  <script src="https://s3.tradingview.com/tv.js"></script>
-
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
-    h1 { margin-bottom: 10px; }
-    .filters label { display: block; margin: 4px 0; }
-    button { margin: 10px 5px 10px 0; padding: 6px 12px; }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 6px;
-      text-align: center;
-    }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
     th { background: #f0f0f0; }
-
-    tr:hover { background: #eef; cursor: pointer; }
-
-    #chart {
-      margin-top: 30px;
-      height: 520px;
-    }
+    tr:hover { background: #f9f9f9; cursor: pointer; }
+    .filters label { display: block; margin: 4px 0; }
   </style>
 </head>
-
 <body>
+
 <h1>NSE Stock Screener</h1>
 
-<!-- FILTERS -->
 <div class="filters">
   <h3>Filters</h3>
-  <label><input type="checkbox" id="adx" checked> ADX (22–30)</label>
-  <label><input type="checkbox" id="macd" checked> MACD &gt; Signal</label>
-  <label><input type="checkbox" id="ema" checked> EMA Alignment</label>
-  <label><input type="checkbox" id="bb" checked> Above BB Middle</label>
-  <label><input type="checkbox" id="volume" checked> Volume &gt; Avg</label>
+  <label><input type="checkbox" id="adx"> ADX (22–30)</label>
+  <label><input type="checkbox" id="macd"> MACD > Signal</label>
+  <label><input type="checkbox" id="ema"> EMA Alignment</label>
+  <label><input type="checkbox" id="bb"> Above BB Middle</label>
+  <label><input type="checkbox" id="volume"> Volume > Avg</label>
+
+  <br>
+  <button onclick="scan()">Scan Stocks</button>
+  <button onclick="exportCSV()">Export CSV</button>
+  <button onclick="exportExcel()">Export Excel</button>
 </div>
 
-<button onclick="scan()">Scan Stocks</button>
-<button onclick="exportCSV()">Export CSV</button>
-<button onclick="exportExcel()">Export Excel</button>
-
-<!-- TABLE -->
-<table id="results">
+<table>
   <thead>
     <tr>
       <th>Rank</th>
@@ -67,111 +44,107 @@
       <th>Trend</th>
     </tr>
   </thead>
-  <tbody></tbody>
+  <tbody id="tbody"></tbody>
 </table>
 
-<!-- CHART -->
-<div id="chart"></div>
+<div id="chart" style="margin-top:30px;"></div>
+
+<script src="https://s3.tradingview.com/tv.js"></script>
 
 <script>
-const BACKEND = "https://nse-stock-screener.onrender.com";
 let lastData = [];
 
-/* ---------------- SCAN ---------------- */
+/* ---------- SAFE FORMATTERS ---------- */
+function num(v, d = 2) {
+  return (typeof v === "number") ? v.toFixed(d) : "-";
+}
+function txt(v) {
+  return (v !== undefined && v !== null && v !== "") ? v : "-";
+}
+
+/* ---------- SCAN ---------- */
 async function scan() {
   const params = new URLSearchParams({
-    adx: document.getElementById("adx").checked,
-    macd: document.getElementById("macd").checked,
-    ema: document.getElementById("ema").checked,
-    bb: document.getElementById("bb").checked,
-    volume: document.getElementById("volume").checked
+    adx: adx.checked,
+    macd: macd.checked,
+    ema: ema.checked,
+    bb: bb.checked,
+    volume: volume.checked
   });
 
   const res = await fetch(`https://nse-stock-screener.onrender.com/scan?${params}`);
   const json = await res.json();
 
-  // 🔴 FIX IS HERE
   const stocks = json.data || [];
-
   lastData = stocks;
+
   renderTable(stocks);
 }
 
-/* ---------------- TABLE ---------------- */
-function renderTable(data) {
-  const tbody = document.querySelector("#results tbody");
+/* ---------- TABLE ---------- */
+function renderTable(stocks) {
+  const tbody = document.getElementById("tbody");
   tbody.innerHTML = "";
 
-  if (!data.length) {
-    tbody.innerHTML =
-      `<tr><td colspan="10">No stocks currently meet your requirements</td></tr>`;
+  if (stocks.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10">No stocks found</td></tr>`;
     return;
   }
 
-  data.slice(0, 10).forEach((s, i) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
+  stocks.slice(0, 10).forEach((s, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
       <td>${i + 1}</td>
-      <td>${s.symbol}</td>
-      <td>${s.score.toFixed(1)}</td>
-      <td>${s.rsi}</td>
-      <td>${s.adx}</td>
-      <td>${s.macd ? "Yes" : "No"}</td>
-      <td>${s.ema ? "Yes" : "No"}</td>
-      <td>${s.bb}</td>
-      <td>${s.volume_ok ? "High" : "Low"}</td>
-      <td>${s.trend}</td>
+      <td>${txt(s.symbol)}</td>
+      <td>${num(s.score)}</td>
+      <td>${num(s.rsi)}</td>
+      <td>${num(s.adx)}</td>
+      <td>${txt(s.macd_signal)}</td>
+      <td>${txt(s.ema_trend)}</td>
+      <td>${txt(s.bb_position)}</td>
+      <td>${txt(s.volume_ratio)}</td>
+      <td>${txt(s.trend)}</td>
     `;
-    row.onclick = () => showChart(s.symbol);
-    tbody.appendChild(row);
+    tr.onclick = () => showChart(s.symbol);
+    tbody.appendChild(tr);
   });
 }
 
-/* ---------------- TRADINGVIEW ---------------- */
+/* ---------- TRADINGVIEW ---------- */
 function showChart(symbol) {
   document.getElementById("chart").innerHTML = "";
   new TradingView.widget({
     autosize: true,
-    symbol: `NSE:${symbol}`,
+    symbol: "NSE:" + symbol,
     interval: "D",
-    timezone: "Asia/Kolkata",
+    container_id: "chart",
     theme: "light",
-    style: "1",
-    studies: [
-      "RSI@tv-basicstudies",
-      "MACD@tv-basicstudies",
-      "ADX@tv-basicstudies",
-      "BB@tv-basicstudies",
-      "EMA@tv-basicstudies"
-    ],
-    container_id: "chart"
+    indicators: ["RSI", "MACD", "BB"],
+    style: 1,
+    locale: "en"
   });
 }
 
-/* ---------------- EXPORT ---------------- */
+/* ---------- EXPORT ---------- */
 function exportCSV() {
-  downloadFile("stocks.csv", toCSV(lastData));
+  let csv = Object.keys(lastData[0] || {}).join(",") + "\n";
+  lastData.forEach(r => {
+    csv += Object.values(r).join(",") + "\n";
+  });
+  download(csv, "stocks.csv");
 }
 
 function exportExcel() {
-  downloadFile("stocks.xls", toCSV(lastData));
+  exportCSV(); // Excel opens CSV fine
 }
 
-function toCSV(rows) {
-  if (!rows.length) return "";
-  const keys = Object.keys(rows[0]);
-  return [
-    keys.join(","),
-    ...rows.map(r => keys.map(k => r[k]).join(","))
-  ].join("\n");
-}
-
-function downloadFile(name, content) {
+function download(text, file) {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([content]));
-  a.download = name;
+  a.href = URL.createObjectURL(new Blob([text]));
+  a.download = file;
   a.click();
 }
 </script>
+
 </body>
 </html>
