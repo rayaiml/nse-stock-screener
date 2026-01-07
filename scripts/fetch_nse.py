@@ -9,12 +9,11 @@ from glob import glob
 BASE_DIR = "data"
 BHAV_DIR = f"{BASE_DIR}/bhavcopy"
 MERGED_FILE = f"{BASE_DIR}/merged_200d.csv"
+
 TARGET_DAYS = 200
+MAX_LOOKBACK_DAYS = 260   # 🔴 CRITICAL SAFETY LIMIT
 
 os.makedirs(BHAV_DIR, exist_ok=True)
-
-def is_trading_day(date):
-    return date.weekday() < 5  # Mon–Fri
 
 def fetch_bhavcopy(date):
     d = date.strftime("%d%m%Y")
@@ -29,28 +28,42 @@ def fetch_bhavcopy(date):
     if r.status_code != 200:
         return False
 
-    with zipfile.ZipFile(io.BytesIO(r.content)) as z:
-        name = z.namelist()[0]
-        df = pd.read_csv(z.open(name))
-        df["DATE"] = date.strftime("%Y-%m-%d")
-        df = df[["SYMBOL","OPEN","HIGH","LOW","CLOSE","TOTTRDQTY","DATE"]]
+    try:
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+            name = z.namelist()[0]
+            df = pd.read_csv(z.open(name))
+            df["DATE"] = date.strftime("%Y-%m-%d")
+            df = df[["SYMBOL","OPEN","HIGH","LOW","CLOSE","TOTTRDQTY","DATE"]]
+            out = f"{BHAV_DIR}/{date.strftime('%Y-%m-%d')}.csv"
+            df.to_csv(out, index=False)
+            print(f"Downloaded {out}")
+            return True
+    except Exception:
+        return False
 
-        out = f"{BHAV_DIR}/{date.strftime('%Y-%m-%d')}.csv"
-        df.to_csv(out, index=False)
+def backfill_200_days():
+    existing = set(os.path.basename(f)[:10] for f in glob(f"{BHAV_DIR}/*.csv"))
 
-    return True
+    collected = len(existing)
+    date = datetime.today()
 
-def ensure_200_days():
-    files = sorted(glob(f"{BHAV_DIR}/*.csv"))
-    dates = [datetime.strptime(os.path.basename(f)[:10], "%Y-%m-%d") for f in files]
+    looked_back = 0
 
-    d = datetime.today()
-    while len(files) < TARGET_DAYS:
-        d -= timedelta(days=1)
-        if not is_trading_day(d):
+    while collected < TARGET_DAYS and looked_back < MAX_LOOKBACK_DAYS:
+        date -= timedelta(days=1)
+        looked_back += 1
+
+        date_str = date.strftime("%Y-%m-%d")
+        if date_str in existing:
             continue
-        if fetch_bhavcopy(d):
-            files.append(f"{BHAV_DIR}/{d.strftime('%Y-%m-%d')}.csv")
+
+        if fetch_bhavcopy(date):
+            collected += 1
+
+    if collected < TARGET_DAYS:
+        raise RuntimeError(
+            f"Only collected {collected} days after looking back {MAX_LOOKBACK_DAYS} days"
+        )
 
 def merge_latest_200():
     files = sorted(glob(f"{BHAV_DIR}/*.csv"))[-TARGET_DAYS:]
@@ -58,20 +71,14 @@ def merge_latest_200():
     merged = pd.concat(dfs, ignore_index=True)
     merged.to_csv(MERGED_FILE, index=False)
 
-    # cleanup old
+    # cleanup old files
     for f in glob(f"{BHAV_DIR}/*.csv")[:-TARGET_DAYS]:
         os.remove(f)
 
 def main():
-    today = datetime.today()
-    today_file = f"{BHAV_DIR}/{today.strftime('%Y-%m-%d')}.csv"
-
-    if is_trading_day(today) and not os.path.exists(today_file):
-        fetch_bhavcopy(today)
-
-    ensure_200_days()
+    backfill_200_days()
     merge_latest_200()
-    print("✅ NSE 200-day dataset ready")
+    print("✅ Rolling 200-day bhavcopy ready")
 
 if __name__ == "__main__":
     main()
