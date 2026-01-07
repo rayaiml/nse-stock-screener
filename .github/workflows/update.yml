@@ -1,27 +1,24 @@
-name: Yahoo Daily Update
+
+name: Yahoo Update
 
 on:
-  schedule:
-    - cron: "30 13 * * 1-5"   # ~7 PM IST
   workflow_dispatch:
+  schedule:
+    - cron: "30 12 * * 1-5"
 
 jobs:
   update:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - run: pip install pandas
-
+      - run: pip install pandas yfinance
       - run: python scripts/yahoo_fetch.py
-
       - run: |
           git config user.name "yahoo-bot"
-          git config user.email "yahoo@users.noreply.github.com"
-          git add data/merged_200d.csv
-          git commit -m "Yahoo daily update" || echo "No changes"
+          git config user.email "yahoo-bot@users.noreply.github.com"
+          git add data/prices.csv
+          git commit -m "Daily Yahoo data update" || echo "No changes"
           git push
