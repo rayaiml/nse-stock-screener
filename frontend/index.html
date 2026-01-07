@@ -63,23 +63,25 @@ function txt(v) {
 }
 
 /* ---------- SCAN ---------- */
+<script>
 async function scan() {
-  const params = new URLSearchParams({
-    adx: adx.checked,
-    macd: macd.checked,
-    ema: ema.checked,
-    bb: bb.checked,
-    volume: volume.checked
-  });
-
-  const res = await fetch(`https://nse-stock-screener.onrender.com/scan?${params}`);
+  const res = await fetch("https://nse-stock-screener.onrender.com/scan");
   const json = await res.json();
 
-  const stocks = json.data || [];
+  let stocks = json.data || [];
+
+  // APPLY FRONTEND FILTERS
+  stocks = applyFilters(stocks);
+
+  // SORT BY SCORE (DESC)
+  stocks.sort((a, b) => (b.score || 0) - (a.score || 0));
+
   lastData = stocks;
 
   renderTable(stocks);
 }
+</script>
+
 
 /* ---------- TABLE ---------- */
 function renderTable(stocks) {
@@ -143,6 +145,18 @@ function download(text, file) {
   a.href = URL.createObjectURL(new Blob([text]));
   a.download = file;
   a.click();
+}
+
+  /* ---------- filters ---------- */
+function applyFilters(data) {
+  return data.filter(s => {
+    if (adx.checked && !(s.adx >= 22 && s.adx <= 30)) return false;
+    if (macd.checked && s.macd_signal !== "Bullish") return false;
+    if (ema.checked && s.ema_trend !== "Bullish") return false;
+    if (bb.checked && s.bb_position !== "Above Middle") return false;
+    if (volume.checked && s.volume_ratio < 1) return false;
+    return true;
+  });
 }
 </script>
 
