@@ -1,6 +1,5 @@
 import logging
 import pandas as pd
-import numpy as np
 import requests
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -13,31 +12,16 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ---------------- SAFE CSV LOADER ----------------
 def load_csv():
     try:
         logger.info(f"Loading CSV from {CSV_URL}")
         df = pd.read_csv(CSV_URL)
-        logger.info(f"CSV loaded successfully. Rows: {len(df)}")
+        logger.info(f"CSV loaded successfully, rows={len(df)}")
         return df
-    except Exception:
+    except Exception as e:
         logger.exception("CSV LOAD FAILED")
         return pd.DataFrame()
 
-# ---------------- INDICATORS ----------------
-def ema(series, span):
-    return series.ewm(span=span, adjust=False).mean()
-
-def rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
-
-# ---------------- ROUTES ----------------
 @app.route("/")
 def home():
     return {"status": "OK"}
@@ -52,20 +36,21 @@ def scan():
 
     if df.empty:
         return jsonify({
-            "error": "CSV not reachable",
+            "error": "CSV is empty or not reachable",
             "csv_url": CSV_URL
         }), 200
 
     results = []
+    avg_vol = int(df["TOTTRDQTY"].mean())
 
-    for _, r in df.head(10).iterrows():
+    for _, r in df.sort_values("TOTTRDQTY", ascending=False).head(10).iterrows():
         results.append({
             "stock": r["SYMBOL"],
             "rsi": "NA",
             "adx": "NA",
             "macd": "NA",
             "volume": int(r["TOTTRDQTY"]),
-            "avg_volume": int(df["TOTTRDQTY"].mean()),
+            "avg_volume": avg_vol,
             "bb": "NA",
             "trend": "NA"
         })
@@ -78,7 +63,7 @@ def debug_csv():
         r = requests.get(CSV_URL, timeout=10)
         return jsonify({
             "status_code": r.status_code,
-            "sample": r.text[:500]
+            "sample": r.text[:300]
         })
     except Exception as e:
         return jsonify({"error": str(e)})
