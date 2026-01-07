@@ -1,9 +1,9 @@
 import yfinance as yf
 import pandas as pd
 import time
-from datetime import datetime
+from pathlib import Path
 
-# === CONFIG ===
+# ================= CONFIG =================
 SYMBOLS = [
     "RELIANCE.NS",
     "TCS.NS",
@@ -12,49 +12,66 @@ SYMBOLS = [
     "ICICIBANK.NS"
 ]
 
-OUT_FILE = "data/prices.csv"
 DAYS = "200d"
-SLEEP_SECONDS = 2   # critical to avoid 429
+SLEEP_SECONDS = 2
+OUT_FILE = Path("data/prices.csv")
 
-def fetch_symbol(symbol):
+# ==========================================
+
+def fetch_one(symbol: str) -> pd.DataFrame:
     print(f"Fetching {symbol}")
-    df = yf.download(
-        symbol,
+
+    df = yf.Ticker(symbol).history(
         period=DAYS,
         interval="1d",
-        progress=False,
         auto_adjust=False
     )
 
     if df.empty:
         print(f"⚠️ No data for {symbol}")
-        return None
+        return pd.DataFrame()
 
     df = df.reset_index()
+
+    df = df.rename(columns={
+        "Date": "Date",
+        "Open": "Open",
+        "High": "High",
+        "Low": "Low",
+        "Close": "Close",
+        "Volume": "Volume"
+    })
+
     df["Symbol"] = symbol
 
     return df[[
-        "Date", "Symbol",
-        "Open", "High", "Low", "Close", "Volume"
+        "Date", "Symbol", "Open", "High", "Low", "Close", "Volume"
     ]]
 
+
 def main():
-    all_rows = []
+    Path("data").mkdir(exist_ok=True)
+
+    frames = []
 
     for sym in SYMBOLS:
-        data = fetch_symbol(sym)
-        if data is not None:
-            all_rows.append(data)
+        df = fetch_one(sym)
+        if not df.empty:
+            frames.append(df)
         time.sleep(SLEEP_SECONDS)
 
-    if not all_rows:
+    if not frames:
         raise RuntimeError("❌ No data fetched from Yahoo")
 
-    final_df = pd.concat(all_rows, ignore_index=True)
-    final_df.sort_values(["Symbol", "Date"], inplace=True)
+    final = pd.concat(frames, axis=0, ignore_index=True)
 
-    final_df.to_csv(OUT_FILE, index=False)
-    print(f"✅ Saved {len(final_df)} rows to {OUT_FILE}")
+    final["Date"] = pd.to_datetime(final["Date"])
+    final = final.sort_values(["Symbol", "Date"])
+
+    final.to_csv(OUT_FILE, index=False)
+
+    print(f"✅ Saved {len(final)} rows to {OUT_FILE}")
+
 
 if __name__ == "__main__":
     main()
