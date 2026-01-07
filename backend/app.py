@@ -2,21 +2,29 @@ import logging
 import pandas as pd
 import numpy as np
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 
-# ---------------- CONFIG ----------------
 CSV_URL = "https://raw.githubusercontent.com/rayaiml/nse-stock-screener/main/data/latest.csv"
 
-# ---------------- APP -------------------
 app = Flask(__name__)
 CORS(app)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ---------------- HELPERS ----------------
+# ---------------- SAFE CSV LOADER ----------------
+def load_csv():
+    try:
+        logger.info(f"Loading CSV from {CSV_URL}")
+        df = pd.read_csv(CSV_URL)
+        logger.info(f"CSV loaded successfully. Rows: {len(df)}")
+        return df
+    except Exception:
+        logger.exception("CSV LOAD FAILED")
+        return pd.DataFrame()
 
+# ---------------- INDICATORS ----------------
 def ema(series, span):
     return series.ewm(span=span, adjust=False).mean()
 
@@ -24,46 +32,15 @@ def rsi(series, period=14):
     delta = series.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-
     avg_gain = gain.rolling(period).mean()
     avg_loss = loss.rolling(period).mean()
-
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-def macd(series):
-    fast = ema(series, 12)
-    slow = ema(series, 26)
-    macd_line = fast - slow
-    signal = ema(macd_line, 9)
-    return macd_line, signal
-
-def bollinger(series, period=20):
-    sma = series.rolling(period).mean()
-    std = series.rolling(period).std()
-    upper = sma + (2 * std)
-    lower = sma - (2 * std)
-    return upper, sma, lower
-
-def adx(high, low, close, period=14):
-    tr = np.maximum(high - low,
-         np.maximum(abs(high - close.shift()),
-                    abs(low - close.shift())))
-
-    plus_dm = np.where((high - high.shift()) > (low.shift() - low),
-                       np.maximum(high - high.shift(), 0), 0)
-
-    minus_dm = np.where((low.shift() - low) > (high - high.shift()),
-                        np.maximum(low.shift() - low, 0), 0)
-
-    atr = pd.Series(tr).rolling(period).mean()
-    plus_di = 100 * pd.Series(plus_dm).rolling(period).mean() / atr
-    minus_di = 100 * pd.Series(minus_dm).rolling(period).mean() / atr
-
-    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
-    return dx.rolling(period).mean()
-
 # ---------------- ROUTES ----------------
+@app.route("/")
+def home():
+    return {"status": "OK"}
 
 @app.route("/ping")
 def ping():
@@ -71,58 +48,40 @@ def ping():
 
 @app.route("/scan")
 def scan():
-    try:
-        logger.info("Fetching CSV from GitHub...")
-        df = pd.read_csv(CSV_URL)
+    df = load_csv()
 
-        if df.empty:
-            return jsonify([])
-
-        results = []
-
-        for symbol, g in df.groupby("SYMBOL"):
-            if len(g) < 60:
-                continue
-
-            close = g["CLOSE"]
-            high = g["HIGH"]
-            low = g["LOW"]
-            volume = g["TOTTRDQTY"]
-
-            ema14 = ema(close, 14).iloc[-1]
-            ema21 = ema(close, 21).iloc[-1]
-            ema35 = ema(close, 35).iloc[-1]
-
-            rsi_val = rsi(close).iloc[-1]
-            macd_line, macd_signal = macd(close)
-
-            bb_upper, bb_mid, bb_lower = bollinger(close)
-            adx_val = adx(high, low, close).iloc[-1]
-
-            results.append({
-                "stock": symbol,
-                "rsi": round(rsi_val, 2),
-                "adx": round(adx_val, 2),
-                "macd": macd_line.iloc[-1] > macd_signal.iloc[-1],
-                "volume": int(volume.iloc[-1]),
-                "avg_volume": int(volume.rolling(21).mean().iloc[-1]),
-                "bb": (
-                    "Upper" if close.iloc[-1] > bb_upper.iloc[-1]
-                    else "Lower" if close.iloc[-1] < bb_lower.iloc[-1]
-                    else "Middle"
-                ),
-                "trend": "Bullish" if ema14 > ema35 else "Neutral"
-            })
-
-        logger.info(f"Scan completed. {len(results)} stocks found")
-        return jsonify(results[:10])
-
-    except Exception as e:
-        logger.exception("SCAN FAILED")
+    if df.empty:
         return jsonify({
-            "error": str(e)
-        }), 500
+            "error": "CSV not reachable",
+            "csv_url": CSV_URL
+        }), 200
 
-# ---------------- MAIN ------------------
+    results = []
+
+    for _, r in df.head(10).iterrows():
+        results.append({
+            "stock": r["SYMBOL"],
+            "rsi": "NA",
+            "adx": "NA",
+            "macd": "NA",
+            "volume": int(r["TOTTRDQTY"]),
+            "avg_volume": int(df["TOTTRDQTY"].mean()),
+            "bb": "NA",
+            "trend": "NA"
+        })
+
+    return jsonify(results)
+
+@app.route("/debug/csv")
+def debug_csv():
+    try:
+        r = requests.get(CSV_URL, timeout=10)
+        return jsonify({
+            "status_code": r.status_code,
+            "sample": r.text[:500]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
