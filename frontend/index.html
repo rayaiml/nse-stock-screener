@@ -1,0 +1,20 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>NSE Stock Screener</title>
+</head>
+<body>
+<h1>NSE Stock Screener</h1>
+<button onclick="load()">Load Data</button>
+<pre id="out"></pre>
+
+<script>
+async function load(){
+  const r = await fetch("https://nse-stock-screener.onrender.com/data");
+  const d = await r.json();
+  document.getElementById("out").innerText = JSON.stringify(d.slice(0,10), null, 2);
+}
+</script>
+</body>
+</html>
