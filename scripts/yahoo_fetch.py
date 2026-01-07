@@ -1,76 +1,93 @@
 import yfinance as yf
 import pandas as pd
-import time
 from pathlib import Path
+import time
 
-# ================= CONFIG =================
-SYMBOLS = [
-    "RELIANCE.NS",
-    "TCS.NS",
-    "INFY.NS",
-    "HDFCBANK.NS",
-    "ICICIBANK.NS"
-]
+# ---------------- CONFIG ---------------- #
+DATA_DIR = Path("data")
+SYMBOL_FILE = DATA_DIR / "symbols.txt"
+OUTPUT_FILE = DATA_DIR / "prices.csv"
 
-DAYS = "200d"
-SLEEP_SECONDS = 2
-OUT_FILE = Path("data/prices.csv")
+START_DATE = "2024-01-01"   # change if needed
+END_DATE = None             # None = today
+SLEEP_SECONDS = 1           # prevent Yahoo rate-limit
+# ---------------------------------------- #
 
-# ==========================================
+def load_symbols():
+    if not SYMBOL_FILE.exists():
+        raise FileNotFoundError("symbols.txt not found in data/")
 
-def fetch_one(symbol: str) -> pd.DataFrame:
-    print(f"Fetching {symbol}")
+    with open(SYMBOL_FILE) as f:
+        symbols = [line.strip() for line in f if line.strip()]
 
-    df = yf.Ticker(symbol).history(
-        period=DAYS,
-        interval="1d",
-        auto_adjust=False
-    )
+    if not symbols:
+        raise ValueError("symbols.txt is empty")
 
-    if df.empty:
-        print(f"⚠️ No data for {symbol}")
-        return pd.DataFrame()
+    return symbols
 
-    df = df.reset_index()
 
-    df = df.rename(columns={
-        "Date": "Date",
-        "Open": "Open",
-        "High": "High",
-        "Low": "Low",
-        "Close": "Close",
-        "Volume": "Volume"
-    })
+def fetch_symbol(symbol):
+    """
+    Fetch OHLCV for ONE symbol and return clean dataframe
+    """
+    try:
+        df = yf.download(
+            symbol,
+            start=START_DATE,
+            end=END_DATE,
+            progress=False,
+            auto_adjust=False
+        )
 
-    df["Symbol"] = symbol
+        if df.empty:
+            print(f"⚠️ No data for {symbol}")
+            return None
 
-    return df[[
-        "Date", "Symbol", "Open", "High", "Low", "Close", "Volume"
-    ]]
+        df.reset_index(inplace=True)
+
+        # Standardize columns
+        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
+        df["Symbol"] = symbol
+
+        # Ensure correct order
+        df = df[["Date", "Symbol", "Open", "High", "Low", "Close", "Volume"]]
+
+        return df
+
+    except Exception as e:
+        print(f"❌ Error fetching {symbol}: {e}")
+        return None
 
 
 def main():
-    Path("data").mkdir(exist_ok=True)
+    DATA_DIR.mkdir(exist_ok=True)
 
-    frames = []
+    symbols = load_symbols()
+    print(f"📈 Fetching data for {len(symbols)} symbols")
 
-    for sym in SYMBOLS:
-        df = fetch_one(sym)
-        if not df.empty:
-            frames.append(df)
+    all_data = []
+
+    for i, symbol in enumerate(symbols, start=1):
+        print(f"[{i}/{len(symbols)}] Fetching {symbol}")
+        df = fetch_symbol(symbol)
+
+        if df is not None:
+            all_data.append(df)
+
         time.sleep(SLEEP_SECONDS)
 
-    if not frames:
-        raise RuntimeError("❌ No data fetched from Yahoo")
+    if not all_data:
+        raise RuntimeError("No data fetched for any symbol")
 
-    final = pd.concat(frames, axis=0, ignore_index=True)
+    final_df = pd.concat(all_data, ignore_index=True)
 
-    final["Date"] = pd.to_datetime(final["Date"]).dt.date
-    final = final.sort_values(["Symbol", "Date"])
+    # Sort cleanly
+    final_df.sort_values(["Symbol", "Date"], inplace=True)
 
-    final.to_csv(OUT_FILE, index=False)
+    # Save
+    final_df.to_csv(OUTPUT_FILE, index=False)
 
-    print(f"✅ Saved {len(final)} rows to {OUT_FILE}")
+    print(f"✅ Saved {len(final_df)} rows to {OUTPUT_FILE}")
 
 
 if __name__ == "__main__":
