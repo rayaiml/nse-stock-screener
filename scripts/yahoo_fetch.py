@@ -1,12 +1,10 @@
-import os
 import yfinance as yf
 import pandas as pd
+import time
+from datetime import datetime
 
-# ✅ Ensure data directory exists
-DATA_DIR = "data"
-os.makedirs(DATA_DIR, exist_ok=True)
-
-symbols = [
+# === CONFIG ===
+SYMBOLS = [
     "RELIANCE.NS",
     "TCS.NS",
     "INFY.NS",
@@ -14,27 +12,49 @@ symbols = [
     "ICICIBANK.NS"
 ]
 
-frames = []
+OUT_FILE = "data/prices.csv"
+DAYS = "200d"
+SLEEP_SECONDS = 2   # critical to avoid 429
 
-for s in symbols:
-    try:
-        df = yf.download(s, period="1y", interval="1d", progress=False)
-        if df.empty:
-            print(f"❌ No data for {s}")
-            continue
+def fetch_symbol(symbol):
+    print(f"Fetching {symbol}")
+    df = yf.download(
+        symbol,
+        period=DAYS,
+        interval="1d",
+        progress=False,
+        auto_adjust=False
+    )
 
-        df.reset_index(inplace=True)
-        df["SYMBOL"] = s.replace(".NS", "")
-        frames.append(df)
+    if df.empty:
+        print(f"⚠️ No data for {symbol}")
+        return None
 
-    except Exception as e:
-        print(f"❌ Failed {s}: {e}")
+    df = df.reset_index()
+    df["Symbol"] = symbol
 
-# ✅ Prevent concat crash
-if not frames:
-    raise RuntimeError("No Yahoo data downloaded")
+    return df[[
+        "Date", "Symbol",
+        "Open", "High", "Low", "Close", "Volume"
+    ]]
 
-out = pd.concat(frames, ignore_index=True)
-out.to_csv(f"{DATA_DIR}/prices.csv", index=False)
+def main():
+    all_rows = []
 
-print("✅ Yahoo prices saved to data/prices.csv")
+    for sym in SYMBOLS:
+        data = fetch_symbol(sym)
+        if data is not None:
+            all_rows.append(data)
+        time.sleep(SLEEP_SECONDS)
+
+    if not all_rows:
+        raise RuntimeError("❌ No data fetched from Yahoo")
+
+    final_df = pd.concat(all_rows, ignore_index=True)
+    final_df.sort_values(["Symbol", "Date"], inplace=True)
+
+    final_df.to_csv(OUT_FILE, index=False)
+    print(f"✅ Saved {len(final_df)} rows to {OUT_FILE}")
+
+if __name__ == "__main__":
+    main()
