@@ -1,30 +1,174 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
   <title>NSE Stock Screener</title>
+
+  <!-- TradingView -->
+  <script src="https://s3.tradingview.com/tv.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h1 { margin-bottom: 10px; }
+    .filters label { display: block; margin: 4px 0; }
+    button { margin: 10px 5px 10px 0; padding: 6px 12px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: center;
+    }
+    th { background: #f0f0f0; }
+
+    tr:hover { background: #eef; cursor: pointer; }
+
+    #chart {
+      margin-top: 30px;
+      height: 520px;
+    }
+  </style>
 </head>
+
 <body>
+<h1>NSE Stock Screener</h1>
 
-<h2>NSE Stock Screener</h2>
+<!-- FILTERS -->
+<div class="filters">
+  <h3>Filters</h3>
+  <label><input type="checkbox" id="adx" checked> ADX (22–30)</label>
+  <label><input type="checkbox" id="macd" checked> MACD &gt; Signal</label>
+  <label><input type="checkbox" id="ema" checked> EMA Alignment</label>
+  <label><input type="checkbox" id="bb" checked> Above BB Middle</label>
+  <label><input type="checkbox" id="volume" checked> Volume &gt; Avg</label>
+</div>
+
 <button onclick="scan()">Scan Stocks</button>
+<button onclick="exportCSV()">Export CSV</button>
+<button onclick="exportExcel()">Export Excel</button>
 
-<table border="1" id="tbl">
-<tr><th>Stock</th><th>Volume</th></tr>
+<!-- TABLE -->
+<table id="results">
+  <thead>
+    <tr>
+      <th>Rank</th>
+      <th>Stock</th>
+      <th>Score</th>
+      <th>RSI</th>
+      <th>ADX</th>
+      <th>MACD</th>
+      <th>EMA</th>
+      <th>BB</th>
+      <th>Volume</th>
+      <th>Trend</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
 </table>
 
+<!-- CHART -->
+<div id="chart"></div>
+
 <script>
-function scan() {
-  fetch("https://nse-stock-screener.onrender.com/scan")
-    .then(r => r.json())
-    .then(d => {
-      const t = document.getElementById("tbl");
-      t.innerHTML = "<tr><th>Stock</th><th>Volume</th></tr>";
-      d.forEach(s => {
-        t.innerHTML += `<tr><td>${s.stock}</td><td>${s.volume}</td></tr>`;
-      });
-    });
+const BACKEND = "https://nse-stock-screener.onrender.com";
+let lastData = [];
+
+/* ---------------- SCAN ---------------- */
+async function scan() {
+  const params = new URLSearchParams({
+    adx: document.getElementById("adx").checked,
+    macd: document.getElementById("macd").checked,
+    ema: document.getElementById("ema").checked,
+    bb: document.getElementById("bb").checked,
+    volume: document.getElementById("volume").checked
+  });
+
+  const res = await fetch(`${BACKEND}/scan?${params}`);
+  const data = await res.json();
+  lastData = data;
+
+  renderTable(data);
+}
+
+/* ---------------- TABLE ---------------- */
+function renderTable(data) {
+  const tbody = document.querySelector("#results tbody");
+  tbody.innerHTML = "";
+
+  if (!data.length) {
+    tbody.innerHTML =
+      `<tr><td colspan="10">No stocks currently meet your requirements</td></tr>`;
+    return;
+  }
+
+  data.slice(0, 10).forEach((s, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${i + 1}</td>
+      <td>${s.symbol}</td>
+      <td>${s.score.toFixed(1)}</td>
+      <td>${s.rsi}</td>
+      <td>${s.adx}</td>
+      <td>${s.macd ? "Yes" : "No"}</td>
+      <td>${s.ema ? "Yes" : "No"}</td>
+      <td>${s.bb}</td>
+      <td>${s.volume_ok ? "High" : "Low"}</td>
+      <td>${s.trend}</td>
+    `;
+    row.onclick = () => showChart(s.symbol);
+    tbody.appendChild(row);
+  });
+}
+
+/* ---------------- TRADINGVIEW ---------------- */
+function showChart(symbol) {
+  document.getElementById("chart").innerHTML = "";
+  new TradingView.widget({
+    autosize: true,
+    symbol: `NSE:${symbol}`,
+    interval: "D",
+    timezone: "Asia/Kolkata",
+    theme: "light",
+    style: "1",
+    studies: [
+      "RSI@tv-basicstudies",
+      "MACD@tv-basicstudies",
+      "ADX@tv-basicstudies",
+      "BB@tv-basicstudies",
+      "EMA@tv-basicstudies"
+    ],
+    container_id: "chart"
+  });
+}
+
+/* ---------------- EXPORT ---------------- */
+function exportCSV() {
+  downloadFile("stocks.csv", toCSV(lastData));
+}
+
+function exportExcel() {
+  downloadFile("stocks.xls", toCSV(lastData));
+}
+
+function toCSV(rows) {
+  if (!rows.length) return "";
+  const keys = Object.keys(rows[0]);
+  return [
+    keys.join(","),
+    ...rows.map(r => keys.map(k => r[k]).join(","))
+  ].join("\n");
+}
+
+function downloadFile(name, content) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content]));
+  a.download = name;
+  a.click();
 }
 </script>
-
 </body>
 </html>
