@@ -1,6 +1,6 @@
+import pandas as pd
 from flask import Flask, jsonify
 from flask_cors import CORS
-import pandas as pd
 import logging
 
 app = Flask(__name__)
@@ -8,33 +8,40 @@ CORS(app)
 
 logging.basicConfig(level=logging.INFO)
 
-CSV_URL = "https://raw.githubusercontent.com/rayaiml/nse-stock-screener/main/data/latest.csv"
+CSV_PATH = "data/merged_200d.csv"
 
-@app.route("/")
-def home():
-    return "NSE Stock Screener Backend OK"
+@app.route("/ping")
+def ping():
+    return {"status": "ok"}
 
 @app.route("/scan")
 def scan():
     try:
-        df = pd.read_csv(CSV_URL)
+        df = pd.read_csv(CSV_PATH)
 
-        # Replace NaN safely
-        df = df.fillna(0)
+        # Basic validation
+        required = {"SYMBOL", "OPEN", "HIGH", "LOW", "CLOSE", "TOTTRDQTY"}
+        if not required.issubset(df.columns):
+            return jsonify({"error": "Invalid CSV format"}), 400
 
-        # Convert to records
-        data = df.to_dict(orient="records")
+        # Latest candle per stock
+        df = df.sort_values("DATE").groupby("SYMBOL").tail(1)
 
-        logging.info(f"Returned {len(data)} stocks")
+        # Minimal payload (NO FILTERING YET)
+        result = []
+        for _, row in df.iterrows():
+            result.append({
+                "symbol": row["SYMBOL"],
+                "close": round(row["CLOSE"], 2),
+                "volume": int(row["TOTTRDQTY"])
+            })
 
-        return jsonify({
-            "count": len(data),
-            "data": data
-        })
+        return jsonify(result[:200])  # raw universe
 
     except Exception as e:
         logging.exception("SCAN FAILED")
         return jsonify({"error": str(e)}), 500
 
+
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
