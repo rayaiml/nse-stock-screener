@@ -1,42 +1,77 @@
 import os
-import pandas as pd
+import io
+import zipfile
 import requests
+import pandas as pd
+from datetime import datetime, timedelta
+from glob import glob
 
-URL = "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%20500"
+BASE_DIR = "data"
+BHAV_DIR = f"{BASE_DIR}/bhavcopy"
+MERGED_FILE = f"{BASE_DIR}/merged_200d.csv"
+TARGET_DAYS = 200
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "application/json",
-    "Referer": "https://www.nseindia.com/"
-}
+os.makedirs(BHAV_DIR, exist_ok=True)
+
+def is_trading_day(date):
+    return date.weekday() < 5  # Mon–Fri
+
+def fetch_bhavcopy(date):
+    d = date.strftime("%d%m%Y")
+    url = f"https://archives.nseindia.com/content/historical/EQUITIES/{date.year}/{date.strftime('%b').upper()}/cm{d}bhav.csv.zip"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/zip"
+    }
+
+    r = requests.get(url, headers=headers, timeout=20)
+    if r.status_code != 200:
+        return False
+
+    with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+        name = z.namelist()[0]
+        df = pd.read_csv(z.open(name))
+        df["DATE"] = date.strftime("%Y-%m-%d")
+        df = df[["SYMBOL","OPEN","HIGH","LOW","CLOSE","TOTTRDQTY","DATE"]]
+
+        out = f"{BHAV_DIR}/{date.strftime('%Y-%m-%d')}.csv"
+        df.to_csv(out, index=False)
+
+    return True
+
+def ensure_200_days():
+    files = sorted(glob(f"{BHAV_DIR}/*.csv"))
+    dates = [datetime.strptime(os.path.basename(f)[:10], "%Y-%m-%d") for f in files]
+
+    d = datetime.today()
+    while len(files) < TARGET_DAYS:
+        d -= timedelta(days=1)
+        if not is_trading_day(d):
+            continue
+        if fetch_bhavcopy(d):
+            files.append(f"{BHAV_DIR}/{d.strftime('%Y-%m-%d')}.csv")
+
+def merge_latest_200():
+    files = sorted(glob(f"{BHAV_DIR}/*.csv"))[-TARGET_DAYS:]
+    dfs = [pd.read_csv(f) for f in files]
+    merged = pd.concat(dfs, ignore_index=True)
+    merged.to_csv(MERGED_FILE, index=False)
+
+    # cleanup old
+    for f in glob(f"{BHAV_DIR}/*.csv")[:-TARGET_DAYS]:
+        os.remove(f)
 
 def main():
-    session = requests.Session()
-    session.get("https://www.nseindia.com", headers=HEADERS)
+    today = datetime.today()
+    today_file = f"{BHAV_DIR}/{today.strftime('%Y-%m-%d')}.csv"
 
-    response = session.get(URL, headers=HEADERS, timeout=20)
-    response.raise_for_status()
+    if is_trading_day(today) and not os.path.exists(today_file):
+        fetch_bhavcopy(today)
 
-    data = response.json()["data"]
-
-    rows = []
-    for d in data:
-        rows.append({
-            "SYMBOL": d["symbol"],
-            "OPEN": d["open"],
-            "HIGH": d["dayHigh"],
-            "LOW": d["dayLow"],
-            "CLOSE": d["lastPrice"],
-            "TOTTRDQTY": d["totalTradedVolume"]
-        })
-
-    df = pd.DataFrame(rows)
-
-    # 🔴 CRITICAL FIX (Scenario B)
-    os.makedirs("data", exist_ok=True)
-    df.to_csv("data/latest.csv", index=False)
-
-    print("Saved data/latest.csv with", len(df), "rows")
+    ensure_200_days()
+    merge_latest_200()
+    print("✅ NSE 200-day dataset ready")
 
 if __name__ == "__main__":
     main()
