@@ -1,19 +1,21 @@
-
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from scanner import scan
+import os
+import pandas as pd
+from flask import Flask, jsonify
 
 app = Flask(__name__)
-CORS(app)
 
-@app.route("/")
-def home():
-    return {"status": "OK"}
+DATA_PATH = "data/latest.csv"
 
 @app.route("/scan")
-def run_scan():
-    filters = {"volume": request.args.get("volume", "1") == "1"}
-    return jsonify(scan(filters))
+def scan():
+    if not os.path.exists(DATA_PATH):
+        return jsonify({
+            "error": "Data file not found",
+            "hint": "Run GitHub Action and redeploy Render",
+            "path": DATA_PATH
+        }), 500
 
-if __name__ == "__main__":
-    app.run()
+    df = pd.read_csv(DATA_PATH)
+
+    # minimal response for now
+    return jsonify(df.head(10).to_dict(orient="records"))
