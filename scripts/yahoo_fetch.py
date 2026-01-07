@@ -65,7 +65,7 @@ def main():
 
     final = pd.concat(frames, axis=0, ignore_index=True)
 
-    final["Date"] = pd.to_datetime(final["Date"])
+    final["Date"] = pd.to_datetime(final["Date"]).dt.date
     final = final.sort_values(["Symbol", "Date"])
 
     final.to_csv(OUT_FILE, index=False)
