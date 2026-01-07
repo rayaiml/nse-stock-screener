@@ -1,26 +1,15 @@
 import pandas as pd
 import yfinance as yf
 from pathlib import Path
-from datetime import datetime
 
-# ---------------- CONFIG ----------------
 SYMBOLS_FILE = "data/symbols.txt"
 OUTPUT_FILE = "data/prices.csv"
-DAYS = 220  # ~200 trading days buffer
-# ----------------------------------------
+DAYS = 220
 
 
 def load_symbols():
-    if not Path(SYMBOLS_FILE).exists():
-        raise FileNotFoundError(f"Missing symbols file: {SYMBOLS_FILE}")
-
     with open(SYMBOLS_FILE) as f:
-        symbols = [s.strip() for s in f if s.strip()]
-
-    if not symbols:
-        raise RuntimeError("symbols.txt is empty")
-
-    return symbols
+        return [s.strip() for s in f if s.strip()]
 
 
 def fetch_symbol(symbol):
@@ -30,18 +19,28 @@ def fetch_symbol(symbol):
             period=f"{DAYS}d",
             interval="1d",
             progress=False,
-            auto_adjust=False,
             threads=False,
         )
 
-        if df.empty:
+        if df is None or df.empty:
             print(f"⚠️ No data: {symbol}")
             return None
 
+        # Normalize dataframe
         df = df.reset_index()
+
+        # Yahoo sometimes returns "Datetime" instead of "Date"
+        if "Date" not in df.columns:
+            if "Datetime" in df.columns:
+                df.rename(columns={"Datetime": "Date"}, inplace=True)
+            else:
+                print(f"⚠️ Date missing: {symbol}")
+                return None
+
         df["Symbol"] = symbol
 
         df = df[["Date", "Symbol", "Open", "High", "Low", "Close", "Volume"]]
+
         return df
 
     except Exception as e:
@@ -66,23 +65,27 @@ def main():
             frames.append(df)
 
     if not frames:
-        raise RuntimeError("No data fetched for any symbol")
+        raise RuntimeError("No valid stock data fetched")
 
     new_data = pd.concat(frames, ignore_index=True)
 
-    # Merge with existing CSV (if exists)
+    # Ensure correct dtypes
+    new_data["Date"] = pd.to_datetime(new_data["Date"], errors="coerce")
+    new_data = new_data.dropna(subset=["Date", "Symbol"])
+
+    # Merge with existing data
     if Path(OUTPUT_FILE).exists():
         old = pd.read_csv(OUTPUT_FILE)
+        old["Date"] = pd.to_datetime(old["Date"], errors="coerce")
         combined = pd.concat([old, new_data], ignore_index=True)
     else:
         combined = new_data
 
-    # Clean
-    combined["Date"] = pd.to_datetime(combined["Date"])
+    # Final clean
     combined = combined.drop_duplicates(subset=["Date", "Symbol"])
     combined = combined.sort_values(["Symbol", "Date"])
 
-    # Keep last ~200 days per symbol
+    # Keep last 200 rows per symbol
     combined = (
         combined.groupby("Symbol", group_keys=False)
         .tail(200)
