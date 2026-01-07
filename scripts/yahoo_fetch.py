@@ -20,16 +20,20 @@ def fetch_symbol(symbol):
             interval="1d",
             progress=False,
             threads=False,
+            auto_adjust=False,
         )
 
         if df is None or df.empty:
             print(f"⚠️ No data: {symbol}")
             return None
 
-        # Normalize dataframe
+        # Flatten columns (important for Yahoo)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
         df = df.reset_index()
 
-        # Yahoo sometimes returns "Datetime" instead of "Date"
+        # Normalize date column
         if "Date" not in df.columns:
             if "Datetime" in df.columns:
                 df.rename(columns={"Datetime": "Date"}, inplace=True)
@@ -37,9 +41,14 @@ def fetch_symbol(symbol):
                 print(f"⚠️ Date missing: {symbol}")
                 return None
 
-        df["Symbol"] = symbol
+        # Required columns check
+        required = {"Date", "Open", "High", "Low", "Close", "Volume"}
+        if not required.issubset(df.columns):
+            print(f"⚠️ Missing OHLCV: {symbol}")
+            return None
 
-        df = df[["Date", "Symbol", "Open", "High", "Low", "Close", "Volume"]]
+        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]].copy()
+        df["Symbol"] = symbol
 
         return df
 
@@ -61,35 +70,38 @@ def main():
     for i, sym in enumerate(symbols, 1):
         print(f"[{i}/{len(symbols)}] Fetching {sym}")
         df = fetch_symbol(sym)
-        if df is not None:
+        if df is not None and not df.empty:
             frames.append(df)
 
     if not frames:
-        raise RuntimeError("No valid stock data fetched")
+        raise RuntimeError("❌ No valid stock data fetched from Yahoo")
 
     new_data = pd.concat(frames, ignore_index=True)
 
-    # Ensure correct dtypes
+    # Safety check
+    if not {"Date", "Symbol"}.issubset(new_data.columns):
+        raise RuntimeError("❌ Critical columns missing after fetch")
+
     new_data["Date"] = pd.to_datetime(new_data["Date"], errors="coerce")
     new_data = new_data.dropna(subset=["Date", "Symbol"])
 
     # Merge with existing data
     if Path(OUTPUT_FILE).exists():
         old = pd.read_csv(OUTPUT_FILE)
-        old["Date"] = pd.to_datetime(old["Date"], errors="coerce")
-        combined = pd.concat([old, new_data], ignore_index=True)
+        if {"Date", "Symbol"}.issubset(old.columns):
+            old["Date"] = pd.to_datetime(old["Date"], errors="coerce")
+            combined = pd.concat([old, new_data], ignore_index=True)
+        else:
+            combined = new_data
     else:
         combined = new_data
 
-    # Final clean
+    # Final cleanup
     combined = combined.drop_duplicates(subset=["Date", "Symbol"])
     combined = combined.sort_values(["Symbol", "Date"])
 
-    # Keep last 200 rows per symbol
-    combined = (
-        combined.groupby("Symbol", group_keys=False)
-        .tail(200)
-    )
+    # Keep last 200 rows per stock
+    combined = combined.groupby("Symbol", group_keys=False).tail(200)
 
     combined.to_csv(OUTPUT_FILE, index=False)
 
