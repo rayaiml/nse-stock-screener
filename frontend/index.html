@@ -87,11 +87,14 @@ async function scan() {
     volume: document.getElementById("volume").checked
   });
 
-  const res = await fetch(`${BACKEND}/scan?${params}`);
-  const data = await res.json();
-  lastData = data;
+  const res = await fetch(`https://nse-stock-screener.onrender.com/scan?${params}`);
+  const json = await res.json();
 
-  renderTable(data);
+  // 🔴 FIX IS HERE
+  const stocks = json.data || [];
+
+  lastData = stocks;
+  renderTable(stocks);
 }
 
 /* ---------------- TABLE ---------------- */
